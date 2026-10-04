@@ -11,8 +11,6 @@ public class LapSimulation
     private double velocity;
 
     private double maximumVelocity;
-    private double totalSpeedDistance;
-
     private double acceleration;
 
     private int currentGear;
@@ -41,6 +39,7 @@ public class LapSimulation
         reset();
     }
 
+    // Runs the complete lap.
     public LapResult simulate()
     {
         reset();
@@ -51,23 +50,22 @@ public class LapSimulation
         int corners =
             circuit.getNumberOfCorners();
 
-        double straightDistance =
-            (
-                circuit.getTotalStraightLength()
-                * 1000.0
-            ) / corners;
+        double straightTotal =
+            circuit.getTotalStraightLength() * 1000.0;
 
-        double cornerDistance =
-            (
-                targetDistance
-                - circuit.getTotalStraightLength() * 1000.0
-            ) / corners;
+        double cornerTotal =
+            targetDistance - straightTotal;
 
-        cornerDistance =
-            Math.max(
-                40.0,
-                cornerDistance
-            );
+        if (cornerTotal < 0)
+        {
+            cornerTotal = targetDistance * 0.30;
+        }
+
+        double straightSection =
+            straightTotal / corners;
+
+        double cornerSection =
+            cornerTotal / corners;
 
         for (
             int corner = 1;
@@ -85,8 +83,9 @@ public class LapSimulation
                 break;
             }
 
+            // Accelerate along the straight.
             simulateStraight(
-                straightDistance,
+                straightSection,
                 targetDistance
             );
 
@@ -98,18 +97,38 @@ public class LapSimulation
                 break;
             }
 
-            simulateBraking(
-                getBrakingDistance(corner)
+            // Calculate the speed required for the upcoming corner.
+            double cornerTargetSpeed =
+                getCornerTargetSpeed(
+                    corner
+                );
+
+            // Brake only until the car reaches the required corner speed.
+            simulateBrakingToSpeed(
+                cornerTargetSpeed,
+                targetDistance
             );
 
+            if (
+                distanceTravelled >= targetDistance
+                || simulationTime >= MAX_SIMULATION_TIME
+            )
+            {
+                break;
+            }
+
+            // Travel through the corner.
             simulateCorner(
                 corner,
-                cornerDistance,
+                cornerSection,
+                cornerTargetSpeed,
                 targetDistance
             );
         }
 
-        if (distanceTravelled >= targetDistance)
+        if (
+            distanceTravelled >= targetDistance
+        )
         {
             distanceTravelled =
                 targetDistance;
@@ -122,25 +141,71 @@ public class LapSimulation
         return createResult();
     }
 
-    private double getBrakingDistance(int corner)
+    // Calculates the usable speed for a corner.
+    private double getCornerTargetSpeed(
+        int corner
+    )
     {
-        int zone =
-            Math.min(
-                corner,
-                circuit.getNumberOfBrakingZones()
+        double radius =
+            circuit.getCornerRadius(
+                corner
             );
 
-        double brakingDistance =
-            circuit.getBrakingDistance(zone);
-
-        if (brakingDistance <= 0)
+        if (radius <= 0)
         {
-            return 50.0;
+            radius =
+                circuit.getAverageCornerRadius();
         }
 
-        return brakingDistance;
+        double publishedModelSpeed =
+            circuit.getCornerApexSpeed(
+                corner
+            ) / 3.6;
+
+        double physicsSpeed =
+            calculator.getMaximumCorneringSpeed(
+                radius
+            );
+
+        double targetSpeed =
+            Math.min(
+                publishedModelSpeed,
+                physicsSpeed
+            );
+
+        double gripFactor;
+
+        if (targetSpeed < 25.0)
+        {
+            gripFactor =
+                circuit.getLowSpeedFactor();
+        }
+        else if (targetSpeed < 45.0)
+        {
+            gripFactor =
+                circuit.getMediumSpeedFactor();
+        }
+        else
+        {
+            gripFactor =
+                circuit.getHighSpeedFactor();
+        }
+
+        targetSpeed *=
+            Math.sqrt(
+                Math.max(
+                    0.50,
+                    gripFactor
+                )
+            );
+
+        return Math.max(
+            12.0,
+            targetSpeed
+        );
     }
 
+    // Simulates acceleration along a straight.
     private void simulateStraight(
         double sectionDistance,
         double targetDistance
@@ -163,76 +228,29 @@ public class LapSimulation
                     - startDistance
                 );
 
-            boolean drs =
+            boolean useDRS =
                 remaining > 300.0
                 && velocity > 45.0;
 
-            calculator.setDRS(drs);
+            calculator.setDRS(
+                useDRS
+            );
 
-            if (velocity < 1.0)
-            {
-                currentGear = 1;
+            currentGear =
+                getBestGearSafely();
 
-                double rpm =
-                    calculator.getEngine().getIdleRPM();
+            double rpm =
+                getOperatingRPM(
+                    velocity,
+                    currentGear
+                );
 
-                acceleration =
-                    calculator.getAcceleration(
-                        rpm,
-                        currentGear,
-                        velocity
-                    );
-            }
-            else
-            {
-                currentGear =
-                    calculator.getBestGear(
-                        velocity
-                    );
-
-                if (currentGear < 1)
-                {
-                    currentGear = 1;
-                }
-
-                double rpm =
-                    calculator.getRPMForSpeed(
-                        velocity,
-                        currentGear
-                    );
-
-                if (
-                    rpm < calculator.getEngine().getIdleRPM()
-                )
-                {
-                    rpm =
-                        calculator.getEngine().getIdleRPM();
-                }
-
-                if (
-                    rpm > calculator.getEngine().getMaximumRPM()
-                )
-                {
-                    currentGear =
-                        Math.min(
-                            calculator.getGearbox().getNumberOfGears(),
-                            currentGear + 1
-                        );
-
-                    rpm =
-                        calculator.getRPMForSpeed(
-                            velocity,
-                            currentGear
-                        );
-                }
-
-                acceleration =
-                    calculator.getAcceleration(
-                        rpm,
-                        currentGear,
-                        velocity
-                    );
-            }
+            acceleration =
+                calculator.getAcceleration(
+                    rpm,
+                    currentGear,
+                    velocity
+                );
 
             if (acceleration < 0)
             {
@@ -248,22 +266,16 @@ public class LapSimulation
         calculator.setDRS(false);
     }
 
-    private void simulateBraking(
-        double brakingDistance
+    // Brakes until the vehicle reaches the target corner speed.
+    private void simulateBrakingToSpeed(
+        double targetSpeed,
+        double targetDistance
     )
     {
-        if (brakingDistance <= 0)
-        {
-            return;
-        }
-
-        double startDistance =
-            distanceTravelled;
-
         while (
-            distanceTravelled - startDistance
-                < brakingDistance
+            velocity > targetSpeed + 1.0
             && velocity > 0.5
+            && distanceTravelled < targetDistance
             && simulationTime < MAX_SIMULATION_TIME
         )
         {
@@ -277,18 +289,21 @@ public class LapSimulation
                 break;
             }
 
-            acceleration =
-                -brakingAcceleration;
-
-            currentGear =
-                calculator.getBestGear(
+            double requiredDeceleration =
+                (
                     velocity
+                    - targetSpeed
+                )
+                / TIME_STEP;
+
+            double appliedDeceleration =
+                Math.min(
+                    brakingAcceleration,
+                    requiredDeceleration
                 );
 
-            if (currentGear < 1)
-            {
-                currentGear = 1;
-            }
+            acceleration =
+                -appliedDeceleration;
 
             double brakingForce =
                 calculator.getMaximumBrakingForce(
@@ -301,16 +316,32 @@ public class LapSimulation
                 TIME_STEP
             );
 
+            currentGear =
+                Math.max(
+                    1,
+                    getBestGearSafely()
+                );
+
             updateState(
                 acceleration,
                 true
             );
         }
+
+        // Never carry braking into the corner unnecessarily.
+        if (
+            velocity < targetSpeed
+        )
+        {
+            acceleration = 0;
+        }
     }
 
+    // Simulates movement through a corner.
     private void simulateCorner(
         int corner,
         double sectionDistance,
+        double targetSpeed,
         double targetDistance
     )
     {
@@ -320,34 +351,15 @@ public class LapSimulation
         }
 
         double radius =
-            circuit.getCornerRadius(corner);
+            circuit.getCornerRadius(
+                corner
+            );
 
         if (radius <= 0)
         {
             radius =
                 circuit.getAverageCornerRadius();
         }
-
-        double circuitApexSpeed =
-            circuit.getCornerApexSpeed(corner)
-            / 3.6;
-
-        double physicsLimit =
-            calculator.getMaximumCorneringSpeed(
-                radius
-            );
-
-        double targetSpeed =
-            Math.min(
-                circuitApexSpeed,
-                physicsLimit
-            );
-
-        targetSpeed =
-            Math.max(
-                8.0,
-                targetSpeed
-            );
 
         double startDistance =
             distanceTravelled;
@@ -359,36 +371,19 @@ public class LapSimulation
             && simulationTime < MAX_SIMULATION_TIME
         )
         {
-            double speedError =
+            double speedDifference =
                 targetSpeed - velocity;
 
-            if (speedError > 1.0)
+            currentGear =
+                getBestGearSafely();
+
+            if (speedDifference > 2.0)
             {
-                currentGear =
-                    calculator.getBestGear(
-                        velocity
+                double rpm =
+                    getOperatingRPM(
+                        velocity,
+                        currentGear
                     );
-
-                if (currentGear < 1)
-                {
-                    currentGear = 1;
-                }
-
-                double rpm;
-
-                if (velocity < 1.0)
-                {
-                    rpm =
-                        calculator.getEngine().getIdleRPM();
-                }
-                else
-                {
-                    rpm =
-                        calculator.getRPMForSpeed(
-                            velocity,
-                            currentGear
-                        );
-                }
 
                 acceleration =
                     Math.max(
@@ -400,11 +395,19 @@ public class LapSimulation
                         )
                     );
             }
-            else if (speedError < -1.0)
+            else if (speedDifference < -2.0)
             {
-                acceleration =
-                    -calculator.getMaximumBrakingAcceleration(
+                double brakingAcceleration =
+                    calculator.getMaximumBrakingAcceleration(
                         velocity
+                    );
+
+                acceleration =
+                    -Math.min(
+                        brakingAcceleration,
+                        Math.abs(
+                            speedDifference
+                        ) / TIME_STEP
                     );
             }
             else
@@ -412,29 +415,39 @@ public class LapSimulation
                 acceleration = 0;
             }
 
+            // Account for the tyre force already being used laterally.
             double lateralForce =
                 calculator.getRequiredCorneringForce(
                     radius,
-                    velocity
+                    Math.max(
+                        velocity,
+                        0
+                    )
                 );
 
-            double availableGrip =
+            double maximumGrip =
                 calculator.getMaximumGripForce(
-                    velocity
+                    Math.max(
+                        velocity,
+                        0
+                    )
                 );
 
-            if (availableGrip > 0)
+            if (
+                maximumGrip > 0
+                && acceleration > 0
+            )
             {
-                double lateralUtilisation =
+                double lateralUsage =
                     lateralForce
-                    / availableGrip;
+                    / maximumGrip;
 
-                lateralUtilisation =
+                lateralUsage =
                     Math.max(
                         0,
                         Math.min(
                             1.0,
-                            lateralUtilisation
+                            lateralUsage
                         )
                     );
 
@@ -443,16 +456,13 @@ public class LapSimulation
                         Math.max(
                             0,
                             1.0
-                            - lateralUtilisation
-                            * lateralUtilisation
+                            - lateralUsage
+                            * lateralUsage
                         )
                     );
 
-                if (acceleration > 0)
-                {
-                    acceleration *=
-                        longitudinalFactor;
-                }
+                acceleration *=
+                    longitudinalFactor;
             }
 
             updateState(
@@ -462,6 +472,67 @@ public class LapSimulation
         }
     }
 
+    // Returns a valid gear for the current speed.
+    private int getBestGearSafely()
+    {
+        int gear =
+            calculator.getBestGear(
+                velocity
+            );
+
+        if (gear < 1)
+        {
+            gear = 1;
+        }
+
+        int maximumGear =
+            calculator.getGearbox().getNumberOfGears();
+
+        if (gear > maximumGear)
+        {
+            gear = maximumGear;
+        }
+
+        return gear;
+    }
+
+    // Returns a usable engine RPM.
+    private double getOperatingRPM(
+        double speed,
+        int gear
+    )
+    {
+        if (speed < 1.0)
+        {
+            return calculator.getEngine().getIdleRPM();
+        }
+
+        double rpm =
+            calculator.getRPMForSpeed(
+                speed,
+                gear
+            );
+
+        double idleRPM =
+            calculator.getEngine().getIdleRPM();
+
+        double maximumRPM =
+            calculator.getEngine().getMaximumRPM();
+
+        if (rpm < idleRPM)
+        {
+            rpm = idleRPM;
+        }
+
+        if (rpm > maximumRPM)
+        {
+            rpm = maximumRPM;
+        }
+
+        return rpm;
+    }
+
+    // Updates vehicle position, speed and thermal state.
     private void updateState(
         double currentAcceleration,
         boolean braking
@@ -489,10 +560,6 @@ public class LapSimulation
             averageVelocity
             * TIME_STEP;
 
-        totalSpeedDistance +=
-            averageVelocity
-            * TIME_STEP;
-
         simulationTime +=
             TIME_STEP;
 
@@ -508,7 +575,7 @@ public class LapSimulation
 
         if (braking)
         {
-            slipRatio = 0.08;
+            slipRatio = 0.05;
         }
         else if (currentAcceleration > 2.0)
         {
@@ -553,8 +620,6 @@ public class LapSimulation
         velocity = 0;
 
         maximumVelocity = 0;
-        totalSpeedDistance = 0;
-
         acceleration = 0;
 
         currentGear = 1;
@@ -639,8 +704,8 @@ public class LapSimulation
         );
 
         System.out.println();
-
         System.out.println("CIRCUIT");
+
         System.out.println(
             "Name: "
             + circuit.getName()
@@ -653,7 +718,6 @@ public class LapSimulation
         );
 
         System.out.println();
-
         System.out.println("SIMULATION");
 
         System.out.println(
