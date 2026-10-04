@@ -1,5 +1,5 @@
-// RaceSpec - Engine Dynamics Model V2
-// Models engine torque, power, RPM behaviour, turbo response and ERS deployment.
+// RaceSpec - Engine Dynamics Model V2.1
+// Models ICE output, turbo response, ERS deployment and RPM behaviour.
 
 public class Engine
 {
@@ -18,13 +18,11 @@ public class Engine
     private double peakTorqueRPM;
     private double peakPowerRPM;
 
-    private double minimumOperatingRPM;
-
     private double turboSpoolRPM;
     private double fullBoostRPM;
     private double turboLowRPMMultiplier;
 
-    private double mechanicalEfficiency;
+    private double outputMultiplier;
 
     private double ersMaximumPower;
     private double ersDeploymentStartRPM;
@@ -55,9 +53,9 @@ public class Engine
             torqueRPM,
             powerRPM,
             torqueRPM * 0.65,
-            torqueRPM * 0.75,
-            1.0,
-            0.90,
+            torqueRPM * 0.85,
+            0.72,
+            1.00,
             0.0,
             0.0,
             maxRPM
@@ -76,8 +74,8 @@ public class Engine
         double powerRPM,
         double spoolRPM,
         double boostRPM,
-        double turboLowMultiplier,
-        double efficiency,
+        double turboMultiplier,
+        double outputFactor,
         double ersPower,
         double ersStartRPM,
         double ersEndRPM
@@ -114,42 +112,48 @@ public class Engine
         if (torqueRPM <= idle || torqueRPM > maxRPM)
         {
             throw new IllegalArgumentException(
-                "Peak torque RPM is outside the valid operating range."
+                "Peak torque RPM is outside the operating range."
             );
         }
 
         if (powerRPM <= torqueRPM || powerRPM > maxRPM)
         {
             throw new IllegalArgumentException(
-                "Peak power RPM is outside the valid operating range."
+                "Peak power RPM is outside the operating range."
             );
         }
 
         if (spoolRPM < idle || spoolRPM > maxRPM)
         {
             throw new IllegalArgumentException(
-                "Turbo spool RPM is outside the valid operating range."
+                "Turbo spool RPM is outside the operating range."
             );
         }
 
         if (boostRPM < spoolRPM || boostRPM > maxRPM)
         {
             throw new IllegalArgumentException(
-                "Full boost RPM is outside the valid operating range."
+                "Full boost RPM is outside the operating range."
             );
         }
 
-        if (turboLowMultiplier <= 0 || turboLowMultiplier > 1.0)
+        if (
+            turboMultiplier <= 0
+            || turboMultiplier > 1.0
+        )
         {
             throw new IllegalArgumentException(
-                "Turbo low RPM multiplier must be between 0 and 1."
+                "Turbo multiplier must be between 0 and 1."
             );
         }
 
-        if (efficiency <= 0 || efficiency > 1.0)
+        if (
+            outputFactor <= 0
+            || outputFactor > 1.0
+        )
         {
             throw new IllegalArgumentException(
-                "Mechanical efficiency must be between 0 and 1."
+                "Output factor must be between 0 and 1."
             );
         }
 
@@ -158,16 +162,6 @@ public class Engine
             throw new IllegalArgumentException(
                 "ERS power cannot be negative."
             );
-        }
-
-        if (ersPower > 0)
-        {
-            if (ersStartRPM <= 0 || ersEndRPM <= ersStartRPM)
-            {
-                throw new IllegalArgumentException(
-                    "Invalid ERS deployment RPM range."
-                );
-            }
         }
 
         type = t;
@@ -183,13 +177,11 @@ public class Engine
         peakTorqueRPM = torqueRPM;
         peakPowerRPM = powerRPM;
 
-        minimumOperatingRPM = idle;
-
         turboSpoolRPM = spoolRPM;
         fullBoostRPM = boostRPM;
-        turboLowRPMMultiplier = turboLowMultiplier;
+        turboLowRPMMultiplier = turboMultiplier;
 
-        mechanicalEfficiency = efficiency;
+        outputMultiplier = outputFactor;
 
         ersMaximumPower = ersPower;
         ersDeploymentStartRPM = ersStartRPM;
@@ -255,7 +247,7 @@ public class Engine
 
     public double getMechanicalEfficiency()
     {
-        return mechanicalEfficiency;
+        return outputMultiplier;
     }
 
     public double getERSMaximumPower()
@@ -280,21 +272,14 @@ public class Engine
 
     public void setThrottle(double value)
     {
-        if (value < 0)
-        {
-            throttle = 0;
-        }
-        else if (value > 1)
-        {
-            throttle = 1;
-        }
-        else
-        {
-            throttle = value;
-        }
+        throttle =
+            Math.max(
+                0.0,
+                Math.min(1.0, value)
+            );
     }
 
-    // Calculates the turbo boost multiplier from engine speed.
+    // Models turbo spool-up with a smooth transition.
     public double getTurboMultiplier(double rpm)
     {
         if (rpm <= turboSpoolRPM)
@@ -308,22 +293,35 @@ public class Engine
         }
 
         double progress =
-            (rpm - turboSpoolRPM)
-            / (fullBoostRPM - turboSpoolRPM);
+            (
+                rpm - turboSpoolRPM
+            )
+            /
+            (
+                fullBoostRPM - turboSpoolRPM
+            );
 
-        // Smoothstep avoids an artificial discontinuity in boost response.
         double smoothProgress =
-            progress * progress * (3.0 - 2.0 * progress);
+            progress
+            * progress
+            * (3.0 - 2.0 * progress);
 
-        return turboLowRPMMultiplier
+        return
+            turboLowRPMMultiplier
             + smoothProgress
-            * (1.0 - turboLowRPMMultiplier);
+            * (
+                1.0
+                - turboLowRPMMultiplier
+            );
     }
 
-    // Produces a smooth torque curve through the engine's key RPM regions.
+    // Generates the base ICE torque curve.
     public double getBaseTorqueAtRPM(double rpm)
     {
-        if (rpm < idleRPM || rpm > maximumRPM)
+        if (
+            rpm < idleRPM
+            || rpm > maximumRPM
+        )
         {
             return 0;
         }
@@ -331,99 +329,163 @@ public class Engine
         if (rpm <= peakTorqueRPM)
         {
             double progress =
-                (rpm - idleRPM)
-                / (peakTorqueRPM - idleRPM);
+                (
+                    rpm - idleRPM
+                )
+                /
+                (
+                    peakTorqueRPM - idleRPM
+                );
+
+            progress =
+                Math.max(
+                    0.0,
+                    Math.min(1.0, progress)
+                );
 
             double smoothProgress =
-                progress * progress
+                progress
+                * progress
                 * (3.0 - 2.0 * progress);
 
             double startingTorque =
-                maximumTorque * 0.58;
+                maximumTorque * 0.55;
 
-            return startingTorque
+            return
+                startingTorque
                 + smoothProgress
-                * (maximumTorque - startingTorque);
+                * (
+                    maximumTorque
+                    - startingTorque
+                );
         }
 
         if (rpm <= peakPowerRPM)
         {
-            double progress =
-                (rpm - peakTorqueRPM)
-                / (peakPowerRPM - peakTorqueRPM);
-
             double targetTorque =
-                (maximumPower * POWER_CONVERSION)
-                / peakPowerRPM;
+                (
+                    maximumPower
+                    * POWER_CONVERSION
+                )
+                /
+                peakPowerRPM;
+
+            double progress =
+                (
+                    rpm - peakTorqueRPM
+                )
+                /
+                (
+                    peakPowerRPM - peakTorqueRPM
+                );
+
+            progress =
+                Math.max(
+                    0.0,
+                    Math.min(1.0, progress)
+                );
 
             double smoothProgress =
-                progress * progress
+                progress
+                * progress
                 * (3.0 - 2.0 * progress);
 
-            return maximumTorque
+            return
+                maximumTorque
                 + smoothProgress
-                * (targetTorque - maximumTorque);
+                * (
+                    targetTorque
+                    - maximumTorque
+                );
         }
 
-        double progress =
-            (rpm - peakPowerRPM)
-            / (maximumRPM - peakPowerRPM);
-
-        progress = Math.min(1.0, Math.max(0.0, progress));
-
         double peakPowerTorque =
-            (maximumPower * POWER_CONVERSION)
-            / peakPowerRPM;
+            (
+                maximumPower
+                * POWER_CONVERSION
+            )
+            /
+            peakPowerRPM;
+
+        double progress =
+            (
+                rpm - peakPowerRPM
+            )
+            /
+            (
+                maximumRPM - peakPowerRPM
+            );
+
+        progress =
+            Math.max(
+                0.0,
+                Math.min(1.0, progress)
+            );
+
+        double smoothProgress =
+            progress
+            * progress
+            * (3.0 - 2.0 * progress);
 
         double endTorque =
             peakPowerTorque * 0.50;
 
-        double smoothProgress =
-            progress * progress
-            * (3.0 - 2.0 * progress);
-
-        return peakPowerTorque
+        return
+            peakPowerTorque
             + smoothProgress
-            * (endTorque - peakPowerTorque);
+            * (
+                endTorque
+                - peakPowerTorque
+            );
     }
 
-    // Returns engine torque after turbo behaviour and throttle are applied.
+    // Returns ICE torque after turbo behaviour and throttle.
     public double getTorqueAtRPM(double rpm)
     {
-        if (rpm < minimumOperatingRPM || rpm > maximumRPM)
+        if (
+            rpm < idleRPM
+            || rpm > maximumRPM
+        )
         {
             return 0;
         }
 
-        double baseTorque =
+        double torque =
             getBaseTorqueAtRPM(rpm);
 
-        double turboMultiplier =
+        torque *=
             getTurboMultiplier(rpm);
 
-        double torque =
-            baseTorque * turboMultiplier;
+        torque *=
+            throttle;
 
-        torque *= throttle;
+        torque *=
+            outputMultiplier;
 
-        // Prevent the model from exceeding the declared maximum torque.
-        torque =
-            Math.min(torque, maximumTorque);
-
-        return torque;
+        return Math.max(
+            0,
+            Math.min(
+                torque,
+                maximumTorque
+            )
+        );
     }
 
-    // Calculates mechanical power from torque and RPM.
+    // Calculates ICE power from torque and RPM.
     public double getPowerAtRPM(double rpm)
     {
         double torque =
             getTorqueAtRPM(rpm);
 
-        return (torque * rpm)
-            / POWER_CONVERSION;
+        return
+            (
+                torque * rpm
+            )
+            /
+            POWER_CONVERSION;
     }
 
-    // Calculates the electrical power available from ERS deployment.
+    // Simplified ERS deployment window.
     public double getERSPowerAtRPM(double rpm)
     {
         if (ersMaximumPower <= 0)
@@ -431,105 +493,136 @@ public class Engine
             return 0;
         }
 
-        if (rpm < ersDeploymentStartRPM
-            || rpm > ersDeploymentEndRPM)
+        if (
+            rpm < ersDeploymentStartRPM
+            || rpm > ersDeploymentEndRPM
+        )
         {
             return 0;
         }
 
-        double centre =
-            (ersDeploymentStartRPM
-            + ersDeploymentEndRPM) / 2.0;
+        double range =
+            ersDeploymentEndRPM
+            - ersDeploymentStartRPM;
 
-        double halfRange =
-            (ersDeploymentEndRPM
-            - ersDeploymentStartRPM) / 2.0;
+        double centre =
+            (
+                ersDeploymentStartRPM
+                + ersDeploymentEndRPM
+            )
+            / 2.0;
 
         double distance =
-            Math.abs(rpm - centre);
+            Math.abs(
+                rpm - centre
+            );
 
         double factor =
-            1.0 - (distance / halfRange);
+            1.0
+            - distance
+            / (range / 2.0);
 
         factor =
-            Math.max(0, factor);
+            Math.max(
+                0,
+                Math.min(1.0, factor)
+            );
 
-        return ersMaximumPower
+        return
+            ersMaximumPower
             * factor
             * throttle;
     }
 
-    // Total wheel-side power before gearbox losses.
+    // Total available power before gearbox losses.
     public double getTotalPowerAtRPM(double rpm)
     {
-        return getPowerAtRPM(rpm)
+        return
+            getPowerAtRPM(rpm)
             + getERSPowerAtRPM(rpm);
     }
 
-    // Total engine-side power after the declared mechanical efficiency.
+    // Kept for compatibility with PerformanceCalculator.
+    // Engine output is no longer reduced by an artificial drivetrain loss.
     public double getUsablePowerAtRPM(double rpm)
     {
-        return getTotalPowerAtRPM(rpm)
-            * mechanicalEfficiency;
+        return getTotalPowerAtRPM(rpm);
     }
 
-    // Converts mechanical power back into equivalent crank torque.
+    // Converts total available power into equivalent crank torque.
     public double getTotalTorqueAtRPM(double rpm)
     {
-        double power =
-            getUsablePowerAtRPM(rpm);
-
         if (rpm <= 0)
         {
             return 0;
         }
 
-        return (power * POWER_CONVERSION)
-            / rpm;
+        double power =
+            getTotalPowerAtRPM(rpm);
+
+        return
+            (
+                power * POWER_CONVERSION
+            )
+            /
+            rpm;
     }
 
-    // Returns the RPM at which a requested power level is reached.
-    public double findRPMForPower(double targetPower)
+    public double findRPMForPower(
+        double targetPower
+    )
     {
         if (targetPower <= 0)
         {
             return idleRPM;
         }
 
-        double bestRPM = idleRPM;
+        double bestRPM =
+            idleRPM;
+
         double smallestDifference =
             Double.MAX_VALUE;
 
         for (
             double rpm = idleRPM;
             rpm <= maximumRPM;
-            rpm += 50.0
+            rpm += 25.0
         )
         {
             double power =
-                getUsablePowerAtRPM(rpm);
+                getTotalPowerAtRPM(rpm);
 
             double difference =
-                Math.abs(power - targetPower);
+                Math.abs(
+                    power - targetPower
+                );
 
-            if (difference < smallestDifference)
+            if (
+                difference
+                < smallestDifference
+            )
             {
-                smallestDifference = difference;
-                bestRPM = rpm;
+                smallestDifference =
+                    difference;
+
+                bestRPM =
+                    rpm;
             }
         }
 
         return bestRPM;
     }
 
-    // Indicates whether the engine has reached the rev limiter.
-    public boolean isAtRevLimiter(double rpm)
+    public boolean isAtRevLimiter(
+        double rpm
+    )
     {
         return rpm >= maximumRPM;
     }
 
-    // Applies a simple hard limiter at the maximum RPM.
-    public double applyRevLimiter(double rpm)
+    public double applyRevLimiter(
+        double rpm
+    )
     {
         if (rpm > maximumRPM)
         {
