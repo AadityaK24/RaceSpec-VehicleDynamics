@@ -1,5 +1,7 @@
-// RaceSpec - Circuit Dynamics Model V2
-// Stores track geometry and performance-demand characteristics.
+// RaceSpec - Complete Circuit Dynamics Model V2
+// Contains all 24 venues from the originally announced 2026 F1 calendar.
+// Circuit length and corner counts use published F1/FIA data.
+// Detailed corner-radius and braking profiles are RaceSpec model inputs.
 
 public class Circuit
 {
@@ -17,16 +19,16 @@ public class Circuit
     private double[] cornerRadii;
     private double[] cornerApexSpeeds;
     private double[] brakingDistances;
-
     private double[] sectorLengths;
 
     private double elevationChange;
-
     private double surfaceGrip;
 
     private double lowSpeedFactor;
     private double mediumSpeedFactor;
     private double highSpeedFactor;
+
+    private double bankingFactor;
 
     public Circuit(String circuitName)
     {
@@ -49,235 +51,527 @@ public class Circuit
     {
         switch (circuitName)
         {
-            case "Monza":
-                name = "Monza";
-
-                // Verified F1 circuit length.
-                trackLength = 5.793;
-
-                // Track-demand approximations.
-                totalStraightLength = 3.60;
-                longestStraightLength = 1.10;
-
-                numberOfBrakingZones = 6;
-                numberOfCorners = 11;
-                averageCornerRadius = 180.0;
-
-                sectorLengths = new double[]
-                {
-                    1.50, 1.60, 2.693
-                };
-
-                cornerRadii = new double[]
-                {
-                    160, 95, 80, 110, 145,
-                    190, 150, 135, 180, 95, 110
-                };
-
-                cornerApexSpeeds = new double[]
-                {
-                    82, 78, 78, 92, 105,
-                    185, 165, 150, 95, 105, 115
-                };
-
-                brakingDistances = new double[]
-                {
-                    120, 95, 80, 90, 70, 85
-                };
-
-                elevationChange = 21.0;
-                surfaceGrip = 1.00;
-
-                lowSpeedFactor = 0.85;
-                mediumSpeedFactor = 0.85;
-                highSpeedFactor = 1.15;
+            case "Melbourne":
+                configure(
+                    "Melbourne",
+                    5.278, 2.30, 0.95,
+                    6, 14, 185,
+                    4, 1.00,
+                    0.85, 1.00, 1.10,
+                    1.00
+                );
                 break;
 
-            case "Monaco":
-                name = "Monaco";
-
-                trackLength = 3.337;
-
-                totalStraightLength = 1.10;
-                longestStraightLength = 0.67;
-
-                numberOfBrakingZones = 8;
-                numberOfCorners = 19;
-                averageCornerRadius = 95.0;
-
-                sectorLengths = new double[]
-                {
-                    1.20, 0.95, 1.187
-                };
-
-                cornerRadii = new double[]
-                {
-                    90, 55, 45, 42, 35,
-                    38, 50, 48, 70, 55,
-                    40, 45, 42, 38, 35,
-                    48, 55, 65, 90
-                };
-
-                cornerApexSpeeds = new double[]
-                {
-                    55, 72, 70, 65, 58,
-                    60, 68, 82, 78, 72,
-                    65, 58, 60, 65, 72,
-                    75, 82, 92, 110
-                };
-
-                brakingDistances = new double[]
-                {
-                    85, 60, 55, 45, 40,
-                    45, 55, 60
-                };
-
-                elevationChange = 42.0;
-                surfaceGrip = 0.99;
-
-                lowSpeedFactor = 1.25;
-                mediumSpeedFactor = 0.85;
-                highSpeedFactor = 0.55;
-                break;
-
-            case "Silverstone":
-                name = "Silverstone";
-
-                trackLength = 5.891;
-
-                totalStraightLength = 2.70;
-                longestStraightLength = 0.77;
-
-                numberOfBrakingZones = 6;
-                numberOfCorners = 18;
-                averageCornerRadius = 160.0;
-
-                sectorLengths = new double[]
-                {
-                    1.88, 1.54, 2.471
-                };
-
-                cornerRadii = new double[]
-                {
-                    210, 240, 190, 170, 150, 135,
-                    145, 180, 220, 250, 210, 170,
-                    140, 155, 185, 220, 250, 180
-                };
-
-                cornerApexSpeeds = new double[]
-                {
-                    135, 175, 105, 100, 110, 120,
-                    130, 145, 160, 175, 150, 135,
-                    120, 110, 105, 155, 165, 130
-                };
-
-                brakingDistances = new double[]
-                {
-                    95, 75, 90, 65, 85, 75
-                };
-
-                elevationChange = 11.0;
-                surfaceGrip = 1.00;
-
-                lowSpeedFactor = 0.75;
-                mediumSpeedFactor = 1.00;
-                highSpeedFactor = 1.20;
+            case "Shanghai":
+                configure(
+                    "Shanghai",
+                    5.451, 2.00, 1.17,
+                    7, 16, 175,
+                    5, 1.00,
+                    0.90, 1.00, 1.05,
+                    1.00
+                );
                 break;
 
             case "Suzuka":
-                name = "Suzuka";
+                configure(
+                    "Suzuka",
+                    5.807, 2.30, 0.80,
+                    7, 18, 140,
+                    7, 1.00,
+                    0.80, 1.00, 1.15,
+                    1.00
+                );
+                break;
 
-                trackLength = 5.807;
+            case "Bahrain":
+                configure(
+                    "Bahrain",
+                    5.412, 2.10, 1.10,
+                    8, 15, 155,
+                    5, 0.99,
+                    0.95, 1.00, 1.10,
+                    1.00
+                );
+                break;
 
-                totalStraightLength = 2.30;
-                longestStraightLength = 0.80;
+            case "Jeddah":
+                configure(
+                    "Jeddah",
+                    6.174, 3.80, 1.20,
+                    7, 27, 210,
+                    5, 0.99,
+                    0.70, 1.00, 1.25,
+                    1.00
+                );
+                break;
 
-                numberOfBrakingZones = 7;
-                numberOfCorners = 18;
-                averageCornerRadius = 140.0;
+            case "Miami":
+                configure(
+                    "Miami",
+                    5.412, 2.10, 1.28,
+                    7, 19, 170,
+                    5, 1.00,
+                    0.80, 1.00, 1.15,
+                    1.00
+                );
+                break;
 
-                sectorLengths = new double[]
-                {
-                    1.85, 1.75, 2.207
-                };
+            case "Montreal":
+                configure(
+                    "Montreal",
+                    4.361, 2.00, 1.17,
+                    8, 14, 155,
+                    6, 0.99,
+                    0.95, 1.00, 1.15,
+                    1.00
+                );
+                break;
 
-                cornerRadii = new double[]
-                {
-                    210, 180, 165, 150, 135, 120,
-                    110, 130, 160, 185, 160, 140,
-                    125, 105, 90, 95, 125, 180
-                };
+            case "Monaco":
+                configure(
+                    "Monaco",
+                    3.337, 1.10, 0.67,
+                    8, 19, 95,
+                    8, 0.99,
+                    1.25, 0.85, 0.55,
+                    1.02
+                );
+                break;
 
-                cornerApexSpeeds = new double[]
-                {
-                    155, 160, 165, 145, 135, 125,
-                    120, 115, 105, 150, 165, 135,
-                    115, 95, 90, 105, 115, 145
-                };
+            case "Barcelona":
+                configure(
+                    "Barcelona",
+                    4.657, 1.90, 1.05,
+                    6, 14, 175,
+                    5, 1.00,
+                    0.80, 1.00, 1.10,
+                    1.00
+                );
+                break;
 
-                brakingDistances = new double[]
-                {
-                    95, 75, 85, 70, 90, 65, 80
-                };
+            case "Spielberg":
+                configure(
+                    "Spielberg",
+                    4.326, 2.20, 0.93,
+                    7, 10, 205,
+                    5, 1.00,
+                    0.90, 1.00, 1.20,
+                    1.00
+                );
+                break;
 
-                elevationChange = 40.0;
-                surfaceGrip = 1.00;
-
-                lowSpeedFactor = 0.80;
-                mediumSpeedFactor = 1.00;
-                highSpeedFactor = 1.15;
+            case "Silverstone":
+                configure(
+                    "Silverstone",
+                    5.891, 2.70, 0.77,
+                    6, 18, 160,
+                    6, 1.00,
+                    0.75, 1.00, 1.20,
+                    1.00
+                );
                 break;
 
             case "Spa":
-                name = "Spa-Francorchamps";
+                configure(
+                    "Spa-Francorchamps",
+                    7.004, 3.20, 1.80,
+                    7, 19, 190,
+                    7, 0.99,
+                    0.80, 0.95, 1.20,
+                    1.00
+                );
+                break;
 
-                trackLength = 7.004;
+            case "Hungary":
+                configure(
+                    "Hungaroring",
+                    4.381, 1.90, 0.79,
+                    7, 14, 125,
+                    6, 1.00,
+                    1.10, 0.95, 0.70,
+                    1.00
+                );
+                break;
 
-                totalStraightLength = 3.20;
-                longestStraightLength = 1.80;
+            case "Zandvoort":
+                configure(
+                    "Zandvoort",
+                    4.259, 1.70, 0.68,
+                    6, 14, 135,
+                    6, 1.00,
+                    1.00, 1.00, 0.95,
+                    1.04
+                );
+                break;
 
-                numberOfBrakingZones = 7;
-                numberOfCorners = 19;
-                averageCornerRadius = 190.0;
+            case "Monza":
+                configure(
+                    "Monza",
+                    5.793, 3.60, 1.10,
+                    6, 11, 180,
+                    6, 1.00,
+                    0.85, 0.85, 1.15,
+                    1.00
+                );
+                break;
 
-                sectorLengths = new double[]
-                {
-                    2.61, 2.28, 2.114
-                };
+            case "Madrid":
+                configure(
+                    "Madrid",
+                    5.414, 2.40, 0.98,
+                    7, 22, 150,
+                    6, 1.00,
+                    0.85, 1.00, 1.10,
+                    1.08
+                );
+                break;
 
-                cornerRadii = new double[]
-                {
-                    90, 130, 180, 210, 220,
-                    190, 175, 145, 120, 105,
-                    110, 130, 145, 165, 180,
-                    150, 120, 100, 90
-                };
+            case "Baku":
+                configure(
+                    "Baku",
+                    6.003, 3.20, 2.20,
+                    6, 20, 185,
+                    5, 0.99,
+                    0.80, 0.95, 1.25,
+                    1.00
+                );
+                break;
 
-                cornerApexSpeeds = new double[]
-                {
-                    85, 135, 165, 175, 180,
-                    170, 160, 150, 135, 120,
-                    140, 150, 160, 175, 185,
-                    165, 145, 120, 100
-                };
+            case "Singapore":
+                configure(
+                    "Singapore",
+                    4.940, 1.60, 0.83,
+                    9, 19, 105,
+                    8, 0.98,
+                    1.20, 0.90, 0.55,
+                    1.00
+                );
+                break;
 
-                brakingDistances = new double[]
-                {
-                    110, 90, 80, 75, 85, 70, 120
-                };
+            case "Austin":
+                configure(
+                    "Circuit of the Americas",
+                    5.513, 2.50, 1.02,
+                    8, 20, 165,
+                    6, 1.00,
+                    0.90, 1.00, 1.10,
+                    1.02
+                );
+                break;
 
-                elevationChange = 102.0;
-                surfaceGrip = 0.99;
+            case "Mexico City":
+                configure(
+                    "Mexico City",
+                    4.304, 2.00, 1.09,
+                    5, 17, 150,
+                    5, 0.98,
+                    0.85, 1.00, 1.05,
+                    1.00
+                );
+                break;
 
-                lowSpeedFactor = 0.80;
-                mediumSpeedFactor = 0.95;
-                highSpeedFactor = 1.20;
+            case "Interlagos":
+                configure(
+                    "Interlagos",
+                    4.309, 1.80, 0.90,
+                    6, 15, 145,
+                    5, 1.00,
+                    0.90, 1.00, 1.10,
+                    1.01
+                );
+                break;
+
+            case "Las Vegas":
+                configure(
+                    "Las Vegas Strip Circuit",
+                    6.201, 3.50, 1.20,
+                    6, 17, 190,
+                    5, 0.99,
+                    0.70, 0.95, 1.30,
+                    1.00
+                );
+                break;
+
+            case "Lusail":
+                configure(
+                    "Lusail International Circuit",
+                    5.419, 2.10, 1.06,
+                    6, 16, 180,
+                    5, 0.99,
+                    0.80, 1.00, 1.15,
+                    1.00
+                );
+                break;
+
+            case "Abu Dhabi":
+                configure(
+                    "Yas Marina Circuit",
+                    5.281, 2.50, 1.20,
+                    7, 16, 155,
+                    6, 1.00,
+                    0.85, 1.00, 1.10,
+                    1.00
+                );
                 break;
 
             default:
                 throw new IllegalArgumentException(
                     "Circuit not available in RaceSpec."
                 );
+        }
+    }
+
+    private void configure(
+        String circuitName,
+        double length,
+        double straightLength,
+        double longestStraight,
+        int brakingZones,
+        int corners,
+        double averageRadius,
+        int seed,
+        double grip,
+        double lowSpeed,
+        double mediumSpeed,
+        double highSpeed,
+        double banking
+    )
+    {
+        name = circuitName;
+
+        trackLength = length;
+        totalStraightLength = straightLength;
+        longestStraightLength = longestStraight;
+
+        numberOfBrakingZones = brakingZones;
+        numberOfCorners = corners;
+        averageCornerRadius = averageRadius;
+
+        elevationChange =
+            getEstimatedElevation(circuitName);
+
+        surfaceGrip = grip;
+
+        lowSpeedFactor = lowSpeed;
+        mediumSpeedFactor = mediumSpeed;
+        highSpeedFactor = highSpeed;
+
+        bankingFactor = banking;
+
+        sectorLengths = new double[]
+        {
+            length * 0.32,
+            length * 0.33,
+            length * 0.35
+        };
+
+        cornerRadii =
+            buildCornerRadii(
+                corners,
+                averageRadius,
+                seed
+            );
+
+        cornerApexSpeeds =
+            buildCornerSpeeds(
+                corners,
+                lowSpeed,
+                mediumSpeed,
+                highSpeed,
+                seed
+            );
+
+        brakingDistances =
+            buildBrakingProfile(
+                brakingZones,
+                longestStraight,
+                corners,
+                seed
+            );
+    }
+
+    // Creates a representative corner-radius distribution.
+    // These are model inputs, not claimed survey measurements.
+    private double[] buildCornerRadii(
+        int corners,
+        double averageRadius,
+        int seed
+    )
+    {
+        double[] values =
+            new double[corners];
+
+        for (int i = 0; i < corners; i++)
+        {
+            double pattern =
+                0.72
+                + (
+                    ((i * 37 + seed * 11) % 57)
+                    / 100.0
+                );
+
+            values[i] =
+                averageRadius * pattern;
+        }
+
+        return values;
+    }
+
+    // Creates representative apex speeds from track character.
+    private double[] buildCornerSpeeds(
+        int corners,
+        double lowFactor,
+        double mediumFactor,
+        double highFactor,
+        int seed
+    )
+    {
+        double[] values =
+            new double[corners];
+
+        for (int i = 0; i < corners; i++)
+        {
+            int pattern =
+                (i * 17 + seed * 7) % 3;
+
+            if (pattern == 0)
+            {
+                values[i] =
+                    55.0
+                    + 35.0 * lowFactor;
+            }
+            else if (pattern == 1)
+            {
+                values[i] =
+                    80.0
+                    + 60.0 * mediumFactor;
+            }
+            else
+            {
+                values[i] =
+                    120.0
+                    + 65.0 * highFactor;
+            }
+        }
+
+        return values;
+    }
+
+    // Creates representative braking-zone distances.
+    private double[] buildBrakingProfile(
+        int zones,
+        double longestStraight,
+        int corners,
+        int seed
+    )
+    {
+        double[] values =
+            new double[zones];
+
+        double base =
+            65.0
+            + Math.min(
+                45.0,
+                longestStraight * 20.0
+            );
+
+        for (int i = 0; i < zones; i++)
+        {
+            double variation =
+                ((i * 19 + seed * 5) % 40)
+                - 20;
+
+            values[i] =
+                Math.max(
+                    40.0,
+                    base + variation
+                );
+        }
+
+        return values;
+    }
+
+    private double getEstimatedElevation(
+        String circuitName
+    )
+    {
+        switch (circuitName)
+        {
+            case "Melbourne":
+                return 4.0;
+
+            case "Shanghai":
+                return 7.0;
+
+            case "Suzuka":
+                return 40.0;
+
+            case "Bahrain":
+                return 17.0;
+
+            case "Jeddah":
+                return 15.0;
+
+            case "Miami":
+                return 4.0;
+
+            case "Montreal":
+                return 8.0;
+
+            case "Monaco":
+                return 42.0;
+
+            case "Barcelona":
+                return 30.0;
+
+            case "Spielberg":
+                return 65.0;
+
+            case "Silverstone":
+                return 11.0;
+
+            case "Spa-Francorchamps":
+                return 102.0;
+
+            case "Hungaroring":
+                return 35.0;
+
+            case "Zandvoort":
+                return 10.0;
+
+            case "Monza":
+                return 21.0;
+
+            case "Madrid":
+                return 25.0;
+
+            case "Baku":
+                return 30.0;
+
+            case "Singapore":
+                return 5.0;
+
+            case "Circuit of the Americas":
+                return 41.0;
+
+            case "Mexico City":
+                return 22.0;
+
+            case "Interlagos":
+                return 43.0;
+
+            case "Las Vegas Strip Circuit":
+                return 8.0;
+
+            case "Lusail International Circuit":
+                return 8.0;
+
+            case "Yas Marina Circuit":
+                return 12.0;
+
+            default:
+                return 0;
         }
     }
 
@@ -393,10 +687,17 @@ public class Circuit
         return highSpeedFactor;
     }
 
-    // Returns a simple track-demand classification.
+    public double getBankingFactor()
+    {
+        return bankingFactor;
+    }
+
     public String getCircuitType()
     {
-        if (lowSpeedFactor > highSpeedFactor)
+        if (
+            lowSpeedFactor > highSpeedFactor
+            && lowSpeedFactor > mediumSpeedFactor
+        )
         {
             return "Technical";
         }
@@ -412,7 +713,6 @@ public class Circuit
         return "Balanced";
     }
 
-    // Estimates the average cornering demand.
     public double getAverageCorneringDemand()
     {
         double total = 0;
@@ -430,16 +730,19 @@ public class Circuit
             total / cornerRadii.length;
     }
 
-    // Estimates the total braking demand represented by the model.
     public double getTotalBrakingDistance()
     {
         double total = 0;
 
-        for (int i = 0; i < brakingDistances.length; i++)
+        for (
+            int i = 0;
+            i < brakingDistances.length;
+            i++
+        )
         {
             total += brakingDistances[i];
         }
 
         return total;
     }
-}
+} 
